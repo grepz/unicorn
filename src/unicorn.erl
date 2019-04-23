@@ -10,10 +10,8 @@
 -ifdef(UNICORN_DEVEL).
     -export([dev_start/0, dev_loader/1, dev_validator/1]).
 -endif.
-
--type document() :: document_object() | document_list() | document_scalar().
--type document_object() :: {list({Key :: document_scalar(), Value :: document()})}.
--type document_list() :: list(Item :: document()).
+-type document() :: document_object() | document_scalar().
+-type document_object() :: #{Key :: document_scalar() := Value :: document()}.
 -type document_scalar() :: binary() | integer() | float() | boolean().
 
 -type procname() :: atom().
@@ -24,7 +22,7 @@
 -type path() :: list(document_scalar()).
 -type error() :: {error, Reason :: any()}.
 
--export_type([document/0, document_object/0, document_list/0, document_scalar/0]).
+-export_type([document/0, document_object/0, document_scalar/0]).
 -export_type([procname/0, loader/0, validator/0, filename/0, path/0, error/0]).
 
 
@@ -131,10 +129,9 @@ get(Descriptor, Path) when is_atom(Descriptor), is_list(Path) ->
     gen_server:call(Descriptor, ?GET(Path)).
 
 
-
 -spec get_path(Path :: path(), Document :: document() | undefined) ->
     {ok, Value :: any()} | {error, undefined}.
-get_path(_Path, undefined) ->
+get_path(_path, undefined) ->
     {error, undefined};
 
 get_path(Key, Value) when not is_list(Key) ->
@@ -143,13 +140,12 @@ get_path(Key, Value) when not is_list(Key) ->
 get_path([], Value) ->
     {ok, Value};
 
-get_path([Key | Path], {Proplist}) ->
-    Struct = proplists:get_value(Key, Proplist),
-    get_path(Path, Struct);
+get_path([Key | Path], Doc) ->
+    InnerDoc = maps:get(Key, Doc, undefined),
+    get_path(Path, InnerDoc);
 
 get_path(Path, _Value) ->
     get_path(Path, undefined).
-
 
 
 -spec to_document(Item :: any()) ->
@@ -157,32 +153,13 @@ get_path(Path, _Value) ->
 to_document(Item) ->
     IsProplist = is_proplist(Item),
     if
+        is_map(Item) ->
+            Item;
         IsProplist ->
-            to_document_pl(Item);
-        is_list(Item) ->
-            to_document_l(Item);
+            maps:from_list(Item);
         true ->
             Item
     end.
-
-
-
--spec to_document_pl(Proplist :: list({Key :: document_scalar(), Value :: any()})) ->
-    Document :: document_object().
-to_document_pl(Proplist) ->
-    lists:foldl(fun({Key, Value}, {Acc}) ->
-        {Acc ++ [{Key, to_document(Value)}]}
-    end, {[]}, Proplist).
-
-
-
--spec to_document_l(List :: list()) ->
-    Document :: document_list().
-to_document_l(List) ->
-    lists:foldl(fun(Value, Acc) ->
-        Acc ++ [to_document(Value)]
-    end, [], List).
-
 
 
 %% Internals
